@@ -55,15 +55,15 @@ function OpenOcd-Args {
     throw 'OpenOCD under-reset is not configured. Disable connect_under_reset or use STM32CubeProgrammer.'
   }
   $config=if($Target -eq 'STM32F103'){'stm32f1x.cfg'}else{'stm32f4x.cfg'}
-  return ,@('-s',$Location.Scripts,'-f','interface/stlink.cfg','-c',"adapter speed $freq",'-f',"target/$config",'-c',$Command)
+  return ,@('-s',$Location.Scripts,'-f','interface/stlink.cfg','-f',"target/$config",'-c',"adapter speed $freq",'-c',$Command)
 }
 
 function Get-OpenOcdDevice {
   param($Location,$Settings)
   $last=''
   foreach($trial in @('STM32F103','STM32F405')){
-    $args=OpenOcd-Args $Location $trial $Settings 'init; halt; mdw 0xE0042000 1; shutdown'
-    $result=Invoke-OpenOcd $Location $args
+    $probeArguments=OpenOcd-Args $Location $trial $Settings 'init; halt; mdw 0xE0042000 1; resume; shutdown'
+    $result=Invoke-OpenOcd $Location $probeArguments
     $last=$result.Output
     if($result.ExitCode -ne 0){continue}
     $m=[regex]::Match($result.Output,'(?im)0xE0042000:\s*(?:0x)?([0-9a-f]{8})\b')
@@ -83,10 +83,10 @@ function Invoke-OpenOcdFlash {
   $normalized=$Firmware.Replace('\','/')
   $suffix=if($Settings.auto_reset_after_verify -eq $true){'verify reset exit'}else{'verify exit'}
   $command='program {' + $normalized + '} ' + $suffix + ' 0x08000000'
-  $args=OpenOcd-Args $Location $Target $Settings $command
-  $result=Invoke-OpenOcd $Location $args
+  $flashArguments=OpenOcd-Args $Location $Target $Settings $command
+  $result=Invoke-OpenOcd $Location $flashArguments
   if($result.ExitCode -ne 0){throw ('OpenOCD failed: ' + $result.Output)}
-  if($result.Output -notmatch '(?i)verified'){
+  if($result.Output -notmatch '(?i)\*\*\s*Verified OK\s*\*\*'){
     throw ('OpenOCD did not explicitly report verification success: ' + $result.Output)
   }
   return $result
