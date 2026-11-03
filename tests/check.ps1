@@ -33,6 +33,32 @@ if($archive -notmatch '6BFD3C97135AAFEF8AFFC9AF1ACF34FD0E2B9CA26044506F6ABD7F95B
   Write-Host 'REGRESSION: pinned xPack SHA256 not found.' -ForegroundColor Red
   $failures++
 }
+# Offline IDCODE parser regression tests (no ST-Link required).
+. (Join-Path $root 'scripts\openocd.ps1')
+$f4=Parse-OpenOcdDeviceId "User : STM32_IDCODE=0x10016413"
+$f1=Parse-OpenOcdDeviceId "STM32_IDCODE=0x20036410"
+$untagged=Parse-OpenOcdDeviceId "Info : [stm32f4x.cpu] Cortex-M4 detected"
+if(-not $f4 -or $f4.Target -ne 'STM32F405' -or $f4.DeviceId -ne 0x413){
+  Write-Host 'REGRESSION: STM32F405 IDCODE parse failed.' -ForegroundColor Red
+  $failures++
+}
+if(-not $f1 -or $f1.Target -ne 'STM32F103' -or $f1.DeviceId -ne 0x410){
+  Write-Host 'REGRESSION: STM32F103 IDCODE parse failed.' -ForegroundColor Red
+  $failures++
+}
+if($untagged){
+  Write-Host 'REGRESSION: unsupported log recognized as MCU ID.' -ForegroundColor Red
+  $failures++
+}
+$probeFile=Get-Content -LiteralPath (Join-Path $root 'scripts\openocd.ps1') -Raw -Encoding UTF8
+if($probeFile -notmatch 'echo \[format \{STM32_IDCODE=' -or $probeFile -match 'mdw 0xE0042000 1'){
+  Write-Host 'REGRESSION: probe does not use explicit read_memory echo.' -ForegroundColor Red
+  $failures++
+}
+if($probeFile -notmatch 'RedirectStandardError' -or $probeFile -notmatch 'RedirectStandardOutput'){
+  Write-Host 'REGRESSION: stderr/stdout redirection missing.' -ForegroundColor Red
+  $failures++
+}
 if($failures -gt 0){
   Write-Host "FAIL: $failures issues in $total parsed PowerShell files." -ForegroundColor Red
   exit 1
