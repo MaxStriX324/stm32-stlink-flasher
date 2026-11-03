@@ -1,0 +1,7 @@
+{
+  "cube_cli_path": "",
+  "swd_frequency_khz": 1000,
+  "connect_under_reset": false,
+  "auto_reset_after_verify": true,
+  "stlink_serial": ""
+}

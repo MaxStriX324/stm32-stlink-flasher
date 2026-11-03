@@ -1,0 +1,11 @@
+/logs/
+/installers/*
+!/installers/.gitkeep
+/firmware/STM32F103/*
+!/firmware/STM32F103/.gitkeep
+/firmware/STM32F405/*
+!/firmware/STM32F405/.gitkeep
+*.bin
+*.hex
+*.elf
+.pio/
