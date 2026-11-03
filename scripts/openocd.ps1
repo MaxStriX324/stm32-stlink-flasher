@@ -9,9 +9,9 @@ function Find-OpenOcd {
   }
   $cmd=Get-Command openocd.exe -ErrorAction SilentlyContinue
   if($cmd){$candidates.Add($cmd.Source)}
-  $home=if($env:PLATFORMIO_CORE_DIR){$env:PLATFORMIO_CORE_DIR}else{Join-Path $env:USERPROFILE '.platformio'}
+  $platformioHome=if($env:PLATFORMIO_CORE_DIR){$env:PLATFORMIO_CORE_DIR}else{Join-Path $env:USERPROFILE '.platformio'}
   foreach($name in @('tool-openocd','tool-openocd-stm32')){
-    $candidates.Add((Join-Path $home ("packages\" + $name + "\bin\openocd.exe")))
+    $candidates.Add((Join-Path $platformioHome ("packages\" + $name + "\bin\openocd.exe")))
   }
   $portable=Join-Path $ProjectRoot 'tools\openocd'
   if(Test-Path -LiteralPath $portable){
