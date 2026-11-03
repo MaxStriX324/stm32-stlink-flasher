@@ -1,6 +1,24 @@
 param([string]$InstallerPath = '')
 . (Join-Path $PSScriptRoot 'common.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+. (Join-Path $PSScriptRoot 'openocd.ps1')
+if(-not $InstallerPath) {
+  $ocd=Find-OpenOcd
+  if($ocd) {
+    Write-Host "Ready: OpenOCD from $($ocd.Exe)" -ForegroundColor Green
+    Write-Host 'STM32CubeProgrammer is not necessary.'
+    exit 0
+  }
+  $set=Get-FlasherSettings
+  $cube=Find-CubeCli ([string]$set.cube_cli_path)
+  if($cube) {
+    Write-Host "Ready: STM32CubeProgrammer from $cube" -ForegroundColor Green
+    exit 0
+  }
+  Write-Host 'Installing portable OpenOCD from GitHub...'
+  & (Join-Path $PSScriptRoot 'install-openocd.ps1')
+  exit $LASTEXITCODE
+}
 $official = 'https://www.st.com/en/development-tools/stm32cubeprog.html'
 $driver = 'https://www.st.com/en/development-tools/stsw-link009.html'
 
