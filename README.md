@@ -1,5 +1,8 @@
 # STM32 ST-Link Flasher
 
+**Графический режим (Windows):** запустите **`GUI.bat`**. Выберите STM32F103/F405, укажите `firmware.bin` непосредственно из `.pio/build/<env>/`, нажмите «Проверить ST-Link», затем «Прошить и проверить». Результат и журнал отображаются в окне, полные логи сохраняются в `logs/`. Работает через Windows PowerShell 5.1/WinForms, без Python и дополнительных GUI-библиотек. Для консольной работы оставлен `flash.bat`.
+
+
 Прошивка **STM32F103** и **STM32F405** через **ST-Link** на Windows 10/11 без необходимости устанавливать VS Code или PlatformIO на ПК с программатором.
 
 Программа проверяет подключённый MCU по Device ID, записывает BIN во внутреннюю Flash, выполняет проверку записи (verify), сохраняет журнал и при необходимости перезапускает MCU.
@@ -55,10 +58,13 @@
 
 ## Структура
 
+    GUI.bat               <- графический режим
     install.bat
     flash.bat
     settings.json
     scripts/common.ps1
+    scripts/probe.ps1
+    scripts/gui.ps1
     scripts/install.ps1
     scripts/flash.ps1
     firmware/STM32F103/
