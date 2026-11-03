@@ -2,15 +2,17 @@
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
-where powershell.exe >nul 2>nul
-if errorlevel 1 (
-  echo ERROR: Windows PowerShell is required.
-  pause
-  exit /b 1
-)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install.ps1" %*
-set "RC=%ERRORLEVEL%"
+echo =====================================
+echo   STM32 ST-Link Flasher - Installer
+echo =====================================
 echo.
-if "%RC%"=="0" (echo Setup check finished.) else (echo Setup incomplete. Code: %RC%)
-pause
-exit /b %RC%
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install.ps1" %*
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo.
+  echo Setup failed. Error code: %RC%.
+  echo Copy the error text when requesting support.
+  pause
+  exit /b %RC%
+)
+exit /b 0
