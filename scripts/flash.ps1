@@ -4,14 +4,16 @@ param(
   [switch]$Yes
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'openocd.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 function Fail([string]$msg) { throw $msg }
 
 try {
   $settings = Get-FlasherSettings
-  $cli = Find-CubeCli ([string]$settings.cube_cli_path)
-  if (-not $cli) { Fail 'STM32CubeProgrammer CLI not found. Run install.bat.' }
+  $ocd=Find-OpenOcd
+  $cli=Find-CubeCli ([string]$settings.cube_cli_path)
+  if(-not $ocd -and -not $cli){Fail 'OpenOCD and STM32CubeProgrammer not found. Run install.bat.'}
   if (-not $Target) {
     Write-Host '[1] STM32F103'
     Write-Host '[2] STM32F405'
@@ -62,6 +64,29 @@ try {
 
   Write-Host "MCU=$Target; BIN=$bin; Bytes=$($fw.Length)"
   Write-Host "SHA256: $hash"
+  if($ocd){
+    Write-Host "Backend OpenOCD: $($ocd.Exe)"
+    $device=Get-OpenOcdDevice $ocd $settings
+    if($device.Target -ne $Target){
+      Fail ('Connected device looks like {0}, expected {1}. Nothing written.' -f $device.Target,$Target)
+    }
+    Write-Host ('Detected Device ID: 0x{0:X3}' -f $device.DeviceId)
+    Write-Warning 'BIN contains no MCU identity. Verify exact PCB/part number and turn off high voltage/actuators.'
+    if(-not $Yes){
+      if((Read-Host 'Type FLASH to write the MCU') -cne 'FLASH'){Fail 'Cancelled. Nothing written.'}
+    }
+    try{
+      $result=Invoke-OpenOcdFlash $ocd $settings $Target $bin
+      Add-Content -LiteralPath $log -Encoding UTF8 -Value $result.Output
+      Write-Host $result.Output
+      Write-Host 'SUCCESS: OpenOCD write and verify passed.' -ForegroundColor Green
+      Write-Host "Log saved: $log"
+      exit 0
+    }catch{
+      Add-Content -LiteralPath $log -Encoding UTF8 -Value $_.Exception.Message
+      throw
+    }
+  }
   $info = Invoke-Cube $conn
   $m = [regex]::Match($info,'(?im)^\s*(?:Device\s+ID|Chip\s+ID)\s*:\s*0x([0-9a-f]+)')
   if (-not $m.Success) { Fail 'Could not read MCU Device ID; nothing was written.' }
