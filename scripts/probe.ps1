@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][ValidateSet('STM32F103','STM32F405')][string]$Target)
+param([ValidateSet('Auto','STM32F103','STM32F405')][string]$Target='Auto')
 . (Join-Path $PSScriptRoot 'common.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 try {
@@ -16,11 +16,13 @@ try {
   $match=[regex]::Match($info,'(?im)^\s*(?:Device\s+ID|Chip\s+ID)\s*:\s*0x([0-9a-f]+)')
   if(-not $match.Success){throw 'Failed to read MCU Device ID; nothing was written.'}
   $id=[Convert]::ToInt32($match.Groups[1].Value,16)
-  $allowed=if($Target -eq 'STM32F103'){@(0x410,0x412,0x414,0x430)}else{@(0x413)}
-  if($id -notin $allowed){
+  $detected = if($id -in @(0x410,0x412,0x414,0x430)){'STM32F103'} elseif($id -eq 0x413){'STM32F405'} else {$null}
+  if(-not $detected){throw ('Unknown / unsupported MCU Device ID 0x{0:X3}. Nothing was written.' -f $id)}
+  if($Target -ne 'Auto' -and $Target -ne $detected){
     throw ('Wrong MCU: Device ID 0x{0:X3}, selected {1}. Nothing was written.' -f $id,$Target)
   }
-  Write-Host ('SUCCESS: connected to {0}; Device ID 0x{1:X3}' -f $Target,$id)
+  Write-Host ('SUCCESS: compatible with {0}; Device ID 0x{1:X3}' -f $detected,$id)
+  Write-Host ('DETECTED_TARGET={0};DEVICE_ID=0x{1:X3}' -f $detected,$id)
   Write-Warning 'Device ID is shared by other variants; check the part marking / board type.'
   exit 0
 } catch { Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red; exit 1 }
