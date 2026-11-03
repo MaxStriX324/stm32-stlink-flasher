@@ -6,6 +6,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 . (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'openocd.ps1')
 
 $script:busy=$false
 $script:worker=$null
@@ -94,7 +95,7 @@ $hint=Label $pFile 'Файл находится в .pio\build\ИМЯ_ОКРУЖ�
 $hint.ForeColor=C '#67818A'
 
 $btnFlash=Button $form 'ПРОШИТЬ И ПРОВЕРИТЬ' 24 417 244 52 $true
-$btnInstall=Button $form 'Установить ST' 282 421 163 44
+$btnInstall=Button $form 'Установить OpenOCD' 282 421 163 44
 $btnLogs=Button $form 'Папка журналов' 456 421 165 44
 [void](Label $form 'Адрес: 0x08000000' 645 427 223 32 9)
 
@@ -282,8 +283,8 @@ $btnFlash.Add_Click({
   }
   try {
     $s=Get-FlasherSettings
-    if(-not (Find-CubeCli ([string]$s.cube_cli_path))){
-      [void][System.Windows.Forms.MessageBox]::Show('STM32CubeProgrammer не найден. Сначала выполните установку.','Нет CubeProgrammer','OK','Warning')
+    if(-not (Find-OpenOcd) -and -not (Find-CubeCli ([string]$s.cube_cli_path))){
+      [void][System.Windows.Forms.MessageBox]::Show('Не найден OpenOCD или STM32CubeProgrammer. Нажмите «Установить OpenOCD».','Нет инструмента','OK','Warning')
       return
     }
     $fw=Get-Item -LiteralPath $txtFile.Text
@@ -318,7 +319,7 @@ $form.Add_FormClosing({
   }
 })
 Refresh-Firmware
-Log-Line 'Сначала проверьте ST-Link. MCU определяется автоматически по Device ID.'
+Log-Line 'OpenOCD из PlatformIO используется в первую очередь. MCU определяется по Device ID.'
 try { [void]$form.ShowDialog() } finally {
   $timer.Stop()
   $timer.Dispose()
