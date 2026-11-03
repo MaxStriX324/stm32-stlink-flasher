@@ -1,5 +1,7 @@
 # STM32 ST-Link Flasher
 
+**Без STM32CubeProgrammer:** программа сначала ищет OpenOCD из PlatformIO по пути `%USERPROFILE%\\.platformio\\packages\\tool-openocd\\bin\\openocd.exe`. Если установленного OpenOCD нет и нет STM32CubeProgrammer, `install.bat` скачивает портативный ZIP xPack OpenOCD с GitHub, сверяет SHA-256 и распаковывает его в `tools/openocd`. Регистрация на сайте ST не требуется. При необходимости укажите `openocd_path` в `settings.json`. ST-Link USB-драйвер на Windows должен быть установлен отдельно, если его ещё нет.
+
 **Графический режим (Windows):** запустите **`GUI.bat`**. **Выбирать процессор не нужно**: нажмите «Проверить ST-Link», и программа определит семейство через Device ID (F103/F405). Укажите `firmware.bin` непосредственно из `.pio/build/<env>/`, затем нажмите «Прошить и проверить». Результат и журнал отображаются в окне, полные логи сохраняются в `logs/`. Работает через Windows PowerShell 5.1/WinForms, без Python и дополнительных GUI-библиотек. Для консольной работы оставлен `flash.bat`.
 
 
@@ -66,6 +68,8 @@
     settings.json
     scripts/common.ps1
     scripts/probe.ps1
+    scripts/openocd.ps1
+    scripts/install-openocd.ps1
     scripts/gui.ps1
     scripts/install.ps1
     scripts/flash.ps1
@@ -77,3 +81,9 @@
 Файлы BIN и установщики не включаются в репозиторий; см. .gitignore.
 
 [Справочник STM32CubeProgrammer CLI](https://dev.st.com/stm32cube-docs/prog/2.23.0/en/docs/markup/CubeProg_Command_Lines.html).
+
+## Прошивка без STM32CubeProgrammer
+
+Если программатор уже работает через VS Code/PlatformIO, ничего дополнительно скачивать не нужно. Нажмите `GUI.bat`: утилита должна найти OpenOCD в установленном PlatformIO и использовать его для проверки ST-Link, записи и verify. Для отдельного ПК `install.bat` автоматически скачает портативный xPack OpenOCD с GitHub (при наличии доступа) и проверит SHA-256 опубликованного архива. Альтернатива: скачайте ZIP для Windows x64 вручную: https://github.com/xpack-dev-tools/openocd-xpack/releases и распакуйте под `tools/openocd`.
+
+OpenOCD запускается с `interface/stlink.cfg` и `target/stm32f1x.cfg`/ `stm32f4x.cfg` согласно обнаруженному Device ID. Запись BIN происходит по адресу `0x08000000`, затем выполняется verify. Проверка OpenOCD-бэкенда на физическом ST-Link пока не проводилась.
