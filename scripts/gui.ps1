@@ -79,7 +79,7 @@ $pDevice=Panel 24 112 832 104
 [void](Label $pDevice 'Серия MCU' 18 43 110 26 10)
 $lblAuto=Label $pDevice 'Автоматически через ST-Link' 138 45 229 26 9 $true
 $lblDevice=Label $pDevice 'MCU: не проверен' 380 47 245 23 9
-$btnProbe=Button $pDevice 'Проверить ST-Link' 631 37 180 38
+$note=Label $pDevice 'Автоопределение через ST-Link' 611 45 218 28 9
 
 $pFile=Panel 24 232 832 168
 [void](Label $pFile '2. Файл прошивки' 18 12 500 25 11 $true)
@@ -94,10 +94,8 @@ $lblFile=Label $pFile 'Файл не выбран' 18 87 796 25 9
 $hint=Label $pFile 'Файл находится в .pio\build\ИМЯ_ОКРУЖЕНИЯ\firmware.bin после Build в PlatformIO.' 18 124 794 24 9
 $hint.ForeColor=C '#67818A'
 
-$btnFlash=Button $form 'ПРОШИТЬ И ПРОВЕРИТЬ' 24 417 244 52 $true
-$btnInstall=Button $form 'Установить OpenOCD' 282 421 163 44
-$btnLogs=Button $form 'Папка журналов' 456 421 165 44
-[void](Label $form 'Адрес: 0x08000000' 645 427 223 32 9)
+$btnProbe=Button $form '1. ПРОВЕРИТЬ ПОДКЛЮЧЕНИЕ' 24 417 355 52
+$btnFlash=Button $form '2. ПРОШИТЬ С ПРОВЕРКОЙ' 392 417 464 52 $true
 
 $progress=New-Object System.Windows.Forms.ProgressBar
 $progress.Location=[System.Drawing.Point]::new(24,485)
@@ -130,7 +128,6 @@ function Status([string]$message,[bool]$bad=$false) {
 function Refresh-Buttons {
   $btnProbe.Enabled=-not $script:busy
   $btnBrowse.Enabled=-not $script:busy
-  $btnInstall.Enabled=-not $script:busy
   $btnFlash.Enabled=(-not $script:busy) -and ($null -ne $script:detectedTarget) -and (-not [string]::IsNullOrWhiteSpace($txtFile.Text)) -and (Test-Path -LiteralPath $txtFile.Text -PathType Leaf)
 }
 function Refresh-Firmware {
@@ -184,11 +181,11 @@ function Start-Worker([ValidateSet('probe','flash')][string]$operation) {
   $script:outOffset=0
   $script:errOffset=0
   $script:mode=$operation
-  $args='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + (Quoted $path) + ' -Target ' + $target
-  if($operation -eq 'flash') { $args += ' -FirmwarePath ' + (Quoted $txtFile.Text) + ' -Yes' }
+  $workerArguments='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + (Quoted $path) + ' -Target ' + $target
+  if($operation -eq 'flash') { $workerArguments += ' -FirmwarePath ' + (Quoted $txtFile.Text) + ' -Yes' }
   $ps=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
   try {
-    $script:worker=Start-Process -FilePath $ps -ArgumentList $args -WorkingDirectory $ProjectRoot -WindowStyle Hidden -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile -PassThru -ErrorAction Stop
+    $script:worker=Start-Process -FilePath $ps -ArgumentList $workerArguments -WorkingDirectory $ProjectRoot -WindowStyle Hidden -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile -PassThru -ErrorAction Stop
     $script:busy=$true
     $progress.Style=[System.Windows.Forms.ProgressBarStyle]::Marquee
     $progress.MarqueeAnimationSpeed=25
@@ -303,14 +300,6 @@ $btnFlash.Add_Click({
     [void][System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Ошибка подготовки','OK','Error')
   }
 })
-$btnInstall.Add_Click({
-  Start-Process -FilePath (Join-Path $ProjectRoot 'install.bat') -WorkingDirectory $ProjectRoot
-})
-$btnLogs.Add_Click({
-  $logs=Join-Path $ProjectRoot 'logs'
-  New-Item -ItemType Directory -Path $logs -Force | Out-Null
-  Start-Process -FilePath explorer.exe -ArgumentList (Quoted $logs)
-})
 $form.Add_FormClosing({
   param($sender,$eventArgs)
   if($script:busy){
@@ -319,7 +308,7 @@ $form.Add_FormClosing({
   }
 })
 Refresh-Firmware
-Log-Line 'OpenOCD из PlatformIO используется в первую очередь. MCU определяется по Device ID.'
+Log-Line 'Проверьте подключение ST-Link, выберите BIN и нажмите «Прошить с проверкой».'
 try { [void]$form.ShowDialog() } finally {
   $timer.Stop()
   $timer.Dispose()
