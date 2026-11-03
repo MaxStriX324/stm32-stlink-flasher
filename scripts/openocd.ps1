@@ -34,14 +34,38 @@ function Find-OpenOcd {
 }
 
 function Invoke-OpenOcd {
-  param($Location,[string[]]$Arguments)
-  $old=$ErrorActionPreference
-  $ErrorActionPreference='Continue'
+  param($Location,[string[]]$Arguments,[int]$TimeoutSeconds=30)
+  # OpenOCD writes information to stderr even when it succeeds.
+  # In Windows PowerShell 5.1, '2>&1' turns those lines into NativeCommandError records.
+  # Capture stdout and stderr separately to avoid corrupted / missing device-ID output.
+  $stdout=[IO.Path]::GetTempFileName()
+  $stderr=[IO.Path]::GetTempFileName()
+  $process=$null
   try {
-    $out=(& $Location.Exe @Arguments 2>&1 | Out-String)
-    $rc=$LASTEXITCODE
-  } finally {$ErrorActionPreference=$old}
-  return [pscustomobject]@{Output=$out;ExitCode=$rc}
+    # Start-Process in Windows PowerShell 5.1 joins ArgumentList values without quoting.
+    # Quote every argument so paths with spaces and entire Tcl -c commands stay intact.
+    $nativeArguments=($Arguments | ForEach-Object {
+      if($_.Contains('"')){throw 'Unexpected double quote in OpenOCD argument.'}
+      '"' + $_ + '"'
+    }) -join ' '
+    $process=Start-Process -FilePath $Location.Exe -ArgumentList $nativeArguments -WindowStyle Hidden `
+      -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -ErrorAction Stop
+    $completed=$process.WaitForExit($TimeoutSeconds * 1000)
+    if(-not $completed){
+      try{$process.Kill()}catch{}
+      throw ('OpenOCD timed out after ' + $TimeoutSeconds + ' seconds. Check ST-Link connection.')
+    }
+    $exitCode=$process.ExitCode
+    $outText=[IO.File]::ReadAllText($stdout)
+    $errText=[IO.File]::ReadAllText($stderr)
+    $combined=$outText + [Environment]::NewLine + $errText
+    return [pscustomobject]@{Output=$combined;ExitCode=$exitCode}
+  } finally {
+    if($process){$process.Dispose()}
+    foreach($item in @($stdout,$stderr)){
+      if(Test-Path -LiteralPath $item){Remove-Item -LiteralPath $item -Force -ErrorAction SilentlyContinue}
+    }
+  }
 }
 
 function OpenOcd-Args {
@@ -58,23 +82,60 @@ function OpenOcd-Args {
   return ,@('-s',$Location.Scripts,'-f','interface/stlink.cfg','-f',"target/$config",'-c',"adapter speed $freq",'-c',$Command)
 }
 
+function Parse-OpenOcdDeviceId {
+  param([string]$Output)
+  # The explicit echo marker is needed: CLI commands like 'mdw' no longer
+  # always print their return value when executed via -c on modern OpenOCD.
+  $match=[regex]::Match($Output,'(?im)^\s*STM32_IDCODE=0x([0-9a-f]{8})\s*
+
+function Invoke-OpenOcdFlash {
+  param($Location,$Settings,[string]$Target,[string]$Firmware)
+  if($Firmware -match '[{}]'){throw 'BIN path contains curly braces, unsupported by OpenOCD script mode.'}
+  $normalized=$Firmware.Replace('\','/')
+  $suffix=if($Settings.auto_reset_after_verify -eq $true){'verify reset exit'}else{'verify exit'}
+  $command='program {' + $normalized + '} ' + $suffix + ' 0x08000000'
+  $flashArguments=OpenOcd-Args $Location $Target $Settings $command
+  $result=Invoke-OpenOcd $Location $flashArguments 180
+  if($result.ExitCode -ne 0){throw ('OpenOCD failed: ' + $result.Output)}
+  if($result.Output -notmatch '(?i)\*\*\s*Verified OK\s*\*\*'){
+    throw ('OpenOCD did not explicitly report verification success: ' + $result.Output)
+  }
+  return $result
+}
+)
+  if(-not $match.Success){return $null}
+  $raw=[Convert]::ToUInt32($match.Groups[1].Value,16)
+  $id=[int]($raw -band 0xFFF)
+  $family=if($id -in @(0x410,0x412,0x414,0x430)){'STM32F103'}elseif($id -eq 0x413){'STM32F405'}else{$null}
+  return [pscustomobject]@{Target=$family;DeviceId=$id;RawId=$raw}
+}
+
 function Get-OpenOcdDevice {
   param($Location,$Settings)
   $last=''
-  foreach($trial in @('STM32F103','STM32F405')){
-    $probeArguments=OpenOcd-Args $Location $trial $Settings 'init; halt; mdw 0xE0042000 1; resume; shutdown'
-    $result=Invoke-OpenOcd $Location $probeArguments
+  foreach($trial in @('STM32F405','STM32F103')){
+    # read_memory returns a Tcl list; echo prints an explicit parseable IDCODE.
+    # The target is resumed after the non-destructive probe.
+    $command='init; halt; if {[catch {read_memory 0xE0042000 32 1} data]} {echo STM32_READ_FAILED; resume; shutdown error}; echo [format {STM32_IDCODE=0x%08X} [lindex $data 0]]; resume; shutdown'
+    $probeArguments=OpenOcd-Args $Location $trial $Settings $command
+    $result=Invoke-OpenOcd $Location $probeArguments 30
     $last=$result.Output
     if($result.ExitCode -ne 0){continue}
-    $m=[regex]::Match($result.Output,'(?im)0xE0042000:\s*(?:0x)?([0-9a-f]{8})\b')
-    if(-not $m.Success){continue}
-    $raw=[Convert]::ToUInt32($m.Groups[1].Value,16)
-    $id=[int]($raw -band 0xFFF)
-    $family=if($id -in @(0x410,0x412,0x414,0x430)){'STM32F103'}elseif($id -eq 0x413){'STM32F405'}else{$null}
-    if($family){return [pscustomobject]@{Target=$family;DeviceId=$id;RawId=$raw;Output=$result.Output}}
-    throw ('Unsupported Device ID 0x{0:X3}. Nothing written.' -f $id)
+    $device=Parse-OpenOcdDeviceId $result.Output
+    if(-not $device){continue}
+    if(-not $device.Target){
+      throw ('Unsupported Device ID 0x{0:X3}. Nothing written.' -f $device.DeviceId)
+    }
+    # Confirm the family while using the matching OpenOCD target configuration.
+    if($trial -ne $device.Target){continue}
+    return [pscustomobject]@{
+      Target=$device.Target
+      DeviceId=$device.DeviceId
+      RawId=$device.RawId
+      Output=$result.Output
+    }
   }
-  throw ('OpenOCD could not read the MCU Device ID. Nothing written. Last output: ' + $last)
+  throw ('OpenOCD connected but did not report STM32_IDCODE. Nothing was written. Last output: ' + $last)
 }
 
 function Invoke-OpenOcdFlash {
