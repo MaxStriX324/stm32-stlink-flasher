@@ -1,8 +1,20 @@
 param([ValidateSet('Auto','STM32F103','STM32F405')][string]$Target='Auto')
 . (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'openocd.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 try {
   $settings=Get-FlasherSettings
+  $ocd=Find-OpenOcd
+  if($ocd) {
+    Write-Host "Backend OpenOCD: $($ocd.Exe)"
+    $device=Get-OpenOcdDevice $ocd $settings
+    if($Target -ne 'Auto' -and $Target -ne $device.Target) {
+      throw ('Connected device looks like {0}, selected {1}. Nothing written.' -f $device.Target,$Target)
+    }
+    Write-Host ('DETECTED_TARGET={0};DEVICE_ID=0x{1:X3}' -f $device.Target,$device.DeviceId)
+    Write-Host ('SUCCESS: OpenOCD detected Device ID 0x{0:X3} ({1})' -f $device.DeviceId,$device.Target)
+    exit 0
+  }
   $cli=Find-CubeCli ([string]$settings.cube_cli_path)
   if(-not $cli){throw 'STM32CubeProgrammer CLI not found. Run install.bat.'}
   $connection=Get-ConnectionArgs $settings
