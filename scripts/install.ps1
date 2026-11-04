@@ -12,8 +12,8 @@ try {
   New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 
   $distributionFiles=@(
-    'install.bat','GUI.bat','LaunchGUI.vbs','flash.bat','README.md','settings.json',
-    'scripts\common.ps1','scripts\openocd.ps1','scripts\install.ps1',
+    'install.bat','update.bat','GUI.bat','LaunchGUI.vbs','flash.bat','README.md','settings.json',
+    'scripts\common.ps1','scripts\openocd.ps1','scripts\install.ps1','scripts\update.ps1',
     'scripts\install-openocd.ps1','scripts\probe.ps1','scripts\flash.ps1',
     'scripts\gui.ps1','firmware\STM32F103\.gitkeep',
     'firmware\STM32F405\.gitkeep','installers\.gitkeep'
